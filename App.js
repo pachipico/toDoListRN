@@ -1,19 +1,22 @@
 import { StatusBar } from "expo-status-bar";
-import React, { useState } from "react";
-import { StyleSheet, Platform } from "react-native";
+import React, { useState, useEffect } from "react";
+import { StyleSheet, Platform, TouchableOpacity } from "react-native";
 import styled from "styled-components/native";
+import { Feather } from "@expo/vector-icons";
 import Constants from "expo-constants";
+import produce from "immer";
+
 import _ from "lodash";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const Container = styled.SafeAreaView`
-	border: 1px solid #ff0000;
 	padding-top: ${Constants.statusBarHeight}px;
 	flex: 1;
 `;
 
 const Contents = styled.ScrollView`
 	flex: 1;
-	border: 1px solid red;
+	padding: 8px 24px;
 `;
 
 const KeyboardAvoidingView = styled.KeyboardAvoidingView`
@@ -23,6 +26,8 @@ const KeyboardAvoidingView = styled.KeyboardAvoidingView`
 const Input = styled.TextInput`
 	border: 1px solid #e5e5e5;
 	padding: 10px 24px;
+	margin-bottom: 3px;
+
 	flex: 1;
 `;
 
@@ -33,31 +38,53 @@ const ToDoItem = styled.View`
 
 const ToDoText = styled.Text`
 	font-size: 20px;
-	padding: 8px 24px;
 
 	flex: 1;
 `;
 
-const ToDoItemButton = styled.Button``;
+const Check = styled.TouchableOpacity`
+	margin-right: 4px;
+`;
+const CheckIcon = styled.Text`
+	font-size: 20px;
+`;
 
 const InputContainer = styled.View`
 	flex-direction: row;
+	padding-left: 10px;
 `;
 
+const ToDoItemButton = styled.Button``;
 const Button = styled.Button``;
 
 export default function App() {
 	const [newTodo, setNewTodo] = useState("");
-	const [list, setList] = useState([
-		{
-			id: "1",
-			todo: "할일1",
-		},
-		{
-			id: "2",
-			todo: "할일2",
-		},
-	]);
+	const [list, setList] = useState([]);
+
+	useEffect(() => {
+		AsyncStorage.getItem("LIST")
+			.then((data) => {
+				if (data !== null) {
+					setList(JSON.parse(data));
+				}
+			})
+			.catch((err) => alert(err));
+	}, []);
+
+	const store = (newList) => {
+		setList(newList);
+		AsyncStorage.setItem("LIST", JSON.stringify(newList));
+	};
+
+	const handlePress = (id) => {
+		setList(
+			produce(list, (draft) => {
+				draft[id - 1].done = true;
+			})
+		);
+		store(newList);
+	};
+
 	return (
 		<Container>
 			<KeyboardAvoidingView
@@ -67,7 +94,20 @@ export default function App() {
 					{list.map((item) => {
 						return (
 							<ToDoItem key={item.id}>
+								<Check
+									onPress={() => {
+										store(
+											produce(list, (draft) => {
+												draft[item.id - 1].done = !list[item.id - 1].done;
+											})
+										);
+									}}
+								>
+									<CheckIcon>{item.done ? "✅" : "☑️"}</CheckIcon>
+								</Check>
+
 								<ToDoText>{item.todo}</ToDoText>
+
 								<ToDoItemButton
 									title='삭제'
 									onPress={() => {
@@ -75,7 +115,7 @@ export default function App() {
 											list,
 											(garbage) => item.id === garbage.id
 										);
-										setList(rejected);
+										store(rejected);
 									}}
 								/>
 							</ToDoItem>
@@ -91,8 +131,12 @@ export default function App() {
 								setNewTodo("");
 								return;
 							}
-							setList(() => [...list, { id: list.length + 1, todo: newTodo }]);
-
+							let newItem = {
+								id: list.length + 1,
+								todo: newTodo,
+								done: false,
+							};
+							store([...list, newItem]);
 							setNewTodo("");
 						}}
 					></Button>
